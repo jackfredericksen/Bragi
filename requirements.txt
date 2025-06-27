@@ -1,0 +1,12 @@
+openai
+anthropic
+requests
+elevenlabs
+python-dotenv
+selenium
+moviepy
+tqdm
+openai-whisper
+ffmpeg-python
+selenium
+undetected-chromedriver
