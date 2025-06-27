@@ -1,4 +1,3 @@
-openai
 anthropic
 requests
 elevenlabs
@@ -8,5 +7,6 @@ moviepy
 tqdm
 openai-whisper
 ffmpeg-python
-selenium
 undetected-chromedriver
+pydub
+pathlib

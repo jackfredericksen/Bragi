@@ -1,3 +1,59 @@
+# Environment variables and API keys
 .env
-/logs
-*.logs
+*.env
+
+# Generated content folders
+esoteric_content_pipeline/
+/logs/
+*.log
+
+# Browser session data
+*cookies.pkl
+*.pkl
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Audio/Video files (large files)
+*.mp4
+*.mp3
+*.wav
+*.avi
+*.mov
+assets/*.mp3
+assets/*.wav
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
