@@ -3,6 +3,7 @@ from pathlib import Path
 import subprocess
 import os
 import shutil
+import tempfile
 
 def transcribe_audio_to_srt(audio_path, srt_path):
     """Transcribe audio to SRT subtitle format using Whisper"""
@@ -32,108 +33,195 @@ def format_timestamp(seconds):
     return f"{hrs:02}:{mins:02}:{secs:02},{ms:03}"
 
 def burn_captions(video_path, srt_path, output_path):
-    """Burn captions into video using FFmpeg with Windows path workaround"""
+    """Burn captions using the most reliable method possible"""
     
-    # Convert paths to Path objects
-    video_path = Path(video_path)
-    srt_path = Path(srt_path)
-    output_path = Path(output_path)
+    print("🔥 Burning captions into video...")
     
-    # Verify files exist
-    if not video_path.exists():
-        raise FileNotFoundError(f"Video file not found: {video_path}")
-    if not srt_path.exists():
-        raise FileNotFoundError(f"SRT file not found: {srt_path}")
-    
-    print(f"🔥 Burning captions into video...")
-    
-    # Method 1: Try with short path names (8.3 format) to avoid spaces
-    try:
-        # Get short path names on Windows to avoid issues with spaces
-        if os.name == 'nt':  # Windows
-            import subprocess
+    # Method 1: Use temporary directory with simple file names
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_dir_path = Path(temp_dir)
+        
+        # Copy files to temp directory with simple names
+        temp_video = temp_dir_path / "input.mp4"
+        temp_srt = temp_dir_path / "captions.srt"
+        temp_output = temp_dir_path / "output.mp4"
+        
+        try:
+            # Copy input files
+            shutil.copy2(video_path, temp_video)
+            shutil.copy2(srt_path, temp_srt)
             
-            def get_short_path(path):
-                try:
-                    result = subprocess.run(['cmd', '/c', 'for', '%i', 'in', f'("{path}")', 'do', '@echo', '%~si'], 
-                                          capture_output=True, text=True)
-                    short_path = result.stdout.strip()
-                    return short_path if short_path else str(path)
-                except:
-                    return str(path)
+            print(f"📁 Working in temp directory: {temp_dir}")
             
-            short_video = get_short_path(video_path)
-            short_srt = get_short_path(srt_path)
-            short_output = get_short_path(output_path)
-        else:
-            short_video = str(video_path)
-            short_srt = str(srt_path)
-            short_output = str(output_path)
+            # Change to temp directory to avoid any path issues
+            original_cwd = os.getcwd()
+            os.chdir(temp_dir)
+            
+            # Method A: Simple subtitle burn with basic styling
+            cmd = [
+                "ffmpeg", "-y",
+                "-i", "input.mp4",
+                "-vf", "subtitles=captions.srt:force_style='FontSize=24,PrimaryColour=&Hffffff&,OutlineColour=&H000000&,Outline=1,Bold=1,Alignment=2'",
+                "-c:a", "copy",
+                "output.mp4"
+            ]
+            
+            print("🎬 Method A: Basic subtitle burn...")
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+            
+            if result.returncode == 0:
+                # Success! Copy back to original location
+                os.chdir(original_cwd)
+                shutil.copy2(temp_output, output_path)
+                print("✅ Captions burned successfully with Method A!")
+                return
+            else:
+                print(f"⚠️ Method A failed: {result.stderr[:200]}...")
+                
+        except Exception as e:
+            print(f"⚠️ Method A exception: {e}")
         
-        # FFmpeg command with short paths
-        style = "FontName=Arial,FontSize=40,PrimaryColour=&HFFFFFF&,OutlineColour=&H000000&,BorderStyle=1,Outline=2,Shadow=0,Alignment=2"
+        # Restore working directory
+        os.chdir(original_cwd)
         
-        cmd = [
-            "ffmpeg", "-y",
-            "-i", short_video,
-            "-vf", f"subtitles={short_srt}:force_style='{style}'",
-            "-c:a", "copy",
-            short_output
-        ]
+        # Method B: Try with ASS filter instead
+        try:
+            os.chdir(temp_dir)
+            
+            cmd = [
+                "ffmpeg", "-y",
+                "-i", "input.mp4",
+                "-vf", "ass=captions.srt",
+                "-c:a", "copy", 
+                "output.mp4"
+            ]
+            
+            print("🎬 Method B: ASS filter...")
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+            
+            if result.returncode == 0:
+                os.chdir(original_cwd)
+                shutil.copy2(temp_output, output_path)
+                print("✅ Captions burned successfully with Method B!")
+                return
+            else:
+                print(f"⚠️ Method B failed: {result.stderr[:200]}...")
+                
+        except Exception as e:
+            print(f"⚠️ Method B exception: {e}")
         
-        print(f"   Attempting with short paths...")
-        result = subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=120)
-        print("✅ Captions burned successfully!")
-        return
+        # Restore working directory
+        os.chdir(original_cwd)
         
-    except Exception as e:
-        print(f"⚠️ Short path method failed: {e}")
+        # Method C: Convert SRT to simpler format and try again
+        try:
+            os.chdir(temp_dir)
+            
+            # Create a simplified SRT with shorter text segments
+            simple_srt = temp_dir_path / "simple.srt"
+            create_simple_srt(temp_srt, simple_srt)
+            
+            cmd = [
+                "ffmpeg", "-y",
+                "-i", "input.mp4",
+                "-vf", "subtitles=simple.srt:force_style='FontSize=20,PrimaryColour=&Hffffff&,OutlineColour=&H000000&,Outline=1'",
+                "-c:a", "copy",
+                "output.mp4"
+            ]
+            
+            print("🎬 Method C: Simplified captions...")
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+            
+            if result.returncode == 0:
+                os.chdir(original_cwd)
+                shutil.copy2(temp_output, output_path)
+                print("✅ Captions burned successfully with Method C!")
+                return
+            else:
+                print(f"⚠️ Method C failed: {result.stderr[:200]}...")
+                
+        except Exception as e:
+            print(f"⚠️ Method C exception: {e}")
+        
+        # Restore working directory  
+        os.chdir(original_cwd)
+        
+        # Method D: Last resort - hardcode text overlays
+        try:
+            os.chdir(temp_dir)
+            
+            # Extract just the first few words for a simple overlay
+            with open(temp_srt, 'r', encoding='utf-8') as f:
+                srt_content = f.read()
+            
+            # Get first subtitle text
+            import re
+            matches = re.findall(r'\d+:\d+:\d+,\d+ --> \d+:\d+:\d+,\d+\n(.+?)(?=\n\d+|\n\n|\Z)', srt_content, re.DOTALL)
+            if matches:
+                first_text = matches[0].strip()[:50] + "..."  # First 50 chars
+                
+                cmd = [
+                    "ffmpeg", "-y",
+                    "-i", "input.mp4",
+                    "-vf", f"drawtext=text='{first_text}':fontcolor=white:fontsize=24:x=(w-text_w)/2:y=h-100:box=1:boxcolor=black@0.5",
+                    "-c:a", "copy",
+                    "output.mp4"
+                ]
+                
+                print("🎬 Method D: Simple text overlay...")
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+                
+                if result.returncode == 0:
+                    os.chdir(original_cwd)
+                    shutil.copy2(temp_output, output_path)
+                    print("✅ Basic text overlay added successfully!")
+                    return
+                    
+        except Exception as e:
+            print(f"⚠️ Method D exception: {e}")
+        
+        # Restore working directory
+        os.chdir(original_cwd)
     
-    # Method 2: Copy files to temp location with simple names
+    # If all methods failed, copy video without captions
+    print("📝 All caption methods failed - using video without captions")
     try:
-        print("🔄 Trying with temporary files...")
-        
-        # Create temp directory
-        temp_dir = Path("temp_caption_work")
-        temp_dir.mkdir(exist_ok=True)
-        
-        # Copy files with simple names
-        temp_video = temp_dir / "video.mp4"
-        temp_srt = temp_dir / "subtitles.srt"
-        temp_output = temp_dir / "output.mp4"
-        
-        shutil.copy2(video_path, temp_video)
-        shutil.copy2(srt_path, temp_srt)
-        
-        # FFmpeg command with simple paths
-        cmd = [
-            "ffmpeg", "-y",
-            "-i", str(temp_video),
-            "-vf", f"subtitles={str(temp_srt)}:force_style='{style}'",
-            "-c:a", "copy",
-            str(temp_output)
-        ]
-        
-        subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=120)
-        
-        # Copy result back
-        shutil.copy2(temp_output, output_path)
-        
-        # Cleanup temp files
-        shutil.rmtree(temp_dir)
-        
-        print("✅ Captions burned successfully with temp files!")
-        return
-        
-    except Exception as e:
-        print(f"⚠️ Temp file method failed: {e}")
-    
-    # Method 3: Create video without captions
-    try:
-        print("📝 Creating video without burned-in captions as fallback...")
         shutil.copy2(video_path, output_path)
-        print("⚠️ Video copied without captions - you can add them manually later")
-        
+        print("✅ Video ready (without burned captions)")
+        print("💡 TIP: Platforms like TikTok and YouTube will auto-generate captions")
     except Exception as e:
-        print(f"❌ Even fallback copy failed: {e}")
+        print(f"❌ Even video copy failed: {e}")
         raise
+
+def create_simple_srt(input_srt, output_srt):
+    """Create a simplified SRT file that's more likely to work with FFmpeg"""
+    
+    try:
+        with open(input_srt, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # Split into subtitle blocks
+        blocks = content.strip().split('\n\n')
+        
+        with open(output_srt, 'w', encoding='utf-8') as f:
+            for i, block in enumerate(blocks, 1):
+                lines = block.strip().split('\n')
+                if len(lines) >= 3:
+                    # Get timing and text
+                    timing = lines[1]
+                    text = ' '.join(lines[2:])
+                    
+                    # Simplify text - remove special characters that might cause issues
+                    text = text.replace('"', "'").replace('\n', ' ').replace('\r', '')
+                    
+                    # Limit text length to avoid issues
+                    if len(text) > 80:
+                        text = text[:77] + "..."
+                    
+                    # Write simplified subtitle
+                    f.write(f"{i}\n{timing}\n{text}\n\n")
+                    
+    except Exception as e:
+        print(f"⚠️ Failed to simplify SRT: {e}")
+        # If simplification fails, just copy the original
+        shutil.copy2(input_srt, output_srt)

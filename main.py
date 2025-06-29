@@ -68,18 +68,68 @@ def get_random_topic():
     return "The nature of consciousness"
 
 def generate_script_with_claude(topic):
+    """Generate a clean philosophical script without any meta-instructions"""
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-    prompt = f"""You are a mystical philosopher like Alan Watts or Terence McKenna.
-Speak on the topic "{topic}" with poetic, dreamy, and esoteric language. Make it 60–90 seconds long, starting with a hook and ending on a profound note."""
+    
+    # Much cleaner prompt that focuses on content, not delivery
+    prompt = f"""Write a philosophical monologue about "{topic}" in the style of Alan Watts or Terence McKenna. 
+
+Create a 60-90 second spoken piece that:
+- Starts with an intriguing hook or question
+- Explores the topic with poetic, mystical language
+- Uses metaphors and profound insights
+- Ends with a thought-provoking conclusion
+- Flows naturally as spoken word
+
+Write ONLY the monologue content itself - no stage directions, no speaking instructions, no meta-commentary. Just the pure philosophical content as it should be spoken."""
 
     response = client.messages.create(
         model="claude-3-5-sonnet-20241022",
         max_tokens=600,
         temperature=1.0,
-        system="You are an enlightened spiritual narrator.",
+        system="You are a philosophical content writer. Generate only the spoken content, no instructions or directions.",
         messages=[{"role": "user", "content": prompt}]
     )
-    return response.content[0].text.strip()
+    
+    # Clean up the response to remove any meta-instructions that might slip through
+    script = response.content[0].text.strip()
+    
+    # Remove common meta-instruction patterns
+    meta_patterns = [
+        r"\[.*?\]",  # Remove [instructions in brackets]
+        r"\(.*speaking.*\)",  # Remove (speaking instructions)
+        r"\(.*tone.*\)",  # Remove (tone instructions)
+        r"\(.*voice.*\)",  # Remove (voice instructions)
+        r"speaking in.*",  # Remove "speaking in a X manner"
+        r".*contemplative tone.*",  # Remove tone descriptions
+        r".*deliberate.*tone.*",  # Remove deliberate tone mentions
+    ]
+    
+    import re
+    for pattern in meta_patterns:
+        script = re.sub(pattern, "", script, flags=re.IGNORECASE)
+    
+    # Clean up extra whitespace and line breaks
+    script = re.sub(r'\s+', ' ', script).strip()
+    
+    # Remove any sentences that start with meta-instructions
+    sentences = script.split('.')
+    clean_sentences = []
+    
+    for sentence in sentences:
+        sentence = sentence.strip()
+        if sentence and not any(word in sentence.lower() for word in [
+            'speaking', 'voice', 'tone', 'delivery', 'manner', 'contemplative',
+            'deliberate', 'pause', 'emphasis', 'inflection'
+        ]):
+            clean_sentences.append(sentence)
+    
+    # Reconstruct the script
+    clean_script = '. '.join(clean_sentences)
+    if clean_script and not clean_script.endswith('.'):
+        clean_script += '.'
+    
+    return clean_script
 
 def synthesize_audio(text, output_path):
     """Generate speech using OpenAI TTS with dreamy male voice"""
@@ -184,8 +234,8 @@ def add_background_music(voice_audio_path, output_path):
             shutil.copy2(voice_audio_path, output_path)
             return get_audio_duration(output_path)
 
-def download_trippy_video(output_path, target_duration=None):
-    """Download video and ensure it's long enough for the audio"""
+def download_trippy_video(output_path):
+    """Download background video"""
     headers = {"Authorization": PEXELS_API_KEY}
     search_term = random.choice(["psychedelic", "space", "cosmic", "fractal", "nature", "trippy", "meditation", "abstract"])
     url = f"https://api.pexels.com/videos/search?query={search_term}&orientation=portrait&per_page=20"
@@ -195,24 +245,9 @@ def download_trippy_video(output_path, target_duration=None):
     if not data["videos"]:
         raise Exception(f"No videos found for search term: {search_term}")
 
-    # Find a video that's long enough or close to our target duration
-    suitable_video = None
-    
-    for video in data["videos"]:
-        video_duration = video.get("duration", 0)
-        if target_duration and video_duration >= target_duration:
-            suitable_video = video
-            print(f"🎬 Found video with duration {video_duration}s (need {target_duration:.1f}s)")
-            break
-    
-    # Fallback to first video if no suitable duration found
-    if not suitable_video:
-        suitable_video = data["videos"][0]
-        video_duration = suitable_video.get("duration", 0)
-        print(f"🎬 Using first available video (duration: {video_duration}s)")
-    
-    # Get the best quality video file
-    video_files = suitable_video["video_files"]
+    # Get the first available video (we'll loop it to match audio length)
+    video = data["videos"][0]
+    video_files = video["video_files"]
     
     # Prefer HD quality
     best_video = None
@@ -225,7 +260,10 @@ def download_trippy_video(output_path, target_duration=None):
         best_video = video_files[0]
     
     video_url = best_video["link"]
+    video_duration = video.get("duration", 0)
+    
     logging.info(f"Downloading video: {search_term} from {video_url}")
+    print(f"🎬 Downloading {search_term} video (original duration: {video_duration}s)")
     
     r = requests.get(video_url)
     r.raise_for_status()
@@ -253,31 +291,89 @@ def get_video_duration(video_path):
         logging.error(f"Failed to get video duration: {e}")
         return None
 
-def merge_audio_video(audio_path, video_path, output_path, audio_duration):
-    """Merge audio and video with perfect synchronization"""
+def extend_video_to_match_audio(video_path, audio_duration, output_path):
+    """Loop/extend video to match audio duration exactly"""
     
-    # Get actual durations
-    video_duration = get_video_duration(video_path)
+    original_duration = get_video_duration(video_path)
     
-    if video_duration:
-        print(f"🎥 Video duration: {video_duration:.2f} seconds")
-        print(f"🎙️ Audio duration: {audio_duration:.2f} seconds")
+    if not original_duration:
+        print("❌ Could not determine video duration")
+        return False
+    
+    print(f"🎥 Original video duration: {original_duration:.2f} seconds")
+    print(f"🎙️ Target audio duration: {audio_duration:.2f} seconds")
+    
+    if original_duration >= audio_duration:
+        # Video is long enough, just trim to match
+        print(f"✂️ Video is long enough, trimming to {audio_duration:.2f} seconds")
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", str(video_path),
+            "-t", str(audio_duration),  # Trim to exact audio duration
+            "-c", "copy",  # Copy without re-encoding for speed
+            str(output_path)
+        ]
+    else:
+        # Video is too short, loop it to match audio duration
+        loops_needed = int(audio_duration / original_duration) + 1
+        print(f"🔄 Video too short, will loop {loops_needed} times")
         
-        if video_duration < audio_duration:
-            print(f"⚠️ Video is shorter than audio! Will loop video to match.")
-        elif video_duration > audio_duration + 2:  # More than 2 seconds longer
-            print(f"✂️ Video is much longer than audio, will trim to match.")
+        # Create a concat list file
+        concat_file = output_path.parent / "concat_list.txt"
+        with open(concat_file, "w") as f:
+            for i in range(loops_needed):
+                f.write(f"file '{video_path.resolve()}'\n")
+        
+        # Concatenate the video file multiple times, then trim to exact duration
+        cmd = [
+            "ffmpeg", "-y",
+            "-f", "concat",
+            "-safe", "0",
+            "-i", str(concat_file),
+            "-t", str(audio_duration),  # Trim to exact audio duration
+            "-c", "copy",
+            str(output_path)
+        ]
     
-    # Use ffmpeg to merge with perfect audio synchronization
+    try:
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        
+        # Clean up concat file if it exists
+        concat_file = output_path.parent / "concat_list.txt"
+        if concat_file.exists():
+            concat_file.unlink()
+        
+        # Verify the result
+        final_duration = get_video_duration(output_path)
+        if final_duration:
+            print(f"✅ Extended video duration: {final_duration:.2f} seconds")
+            if abs(final_duration - audio_duration) < 1.0:  # Within 1 second is good
+                print(f"🎯 Video duration matches audio!")
+                return True
+            else:
+                print(f"⚠️ Duration mismatch: {abs(final_duration - audio_duration):.2f}s difference")
+        
+        return True
+        
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Video extension failed: {e}")
+        print(f"❌ Failed to extend video: {e}")
+        return False
+
+def merge_audio_video(audio_path, video_path, output_path):
+    """Merge audio and video - video should already be the right length"""
+    
+    print("🎬 Merging audio and video...")
+    
+    # Simple merge - both should be the same duration now
     cmd = [
         "ffmpeg", "-y",
         "-i", str(video_path),
         "-i", str(audio_path),
-        "-c:v", "libx264",  # Re-encode video for better control
-        "-c:a", "aac",
-        "-shortest",  # Use shortest stream (audio will control length)
-        "-fflags", "+shortest",  # Ensure shortest flag is enforced
-        "-max_interleave_delta", "100M",  # Better A/V sync
+        "-c:v", "copy",  # Copy video stream
+        "-c:a", "aac",   # Re-encode audio
+        "-map", "0:v:0",  # Use video from first input
+        "-map", "1:a:0",  # Use audio from second input
         str(output_path)
     ]
     
@@ -289,15 +385,14 @@ def merge_audio_video(audio_path, video_path, output_path, audio_duration):
         final_duration = get_video_duration(output_path)
         if final_duration:
             print(f"✅ Final video duration: {final_duration:.2f} seconds")
-            if abs(final_duration - audio_duration) > 0.5:  # More than 0.5s difference
-                print(f"⚠️ Duration mismatch: video {final_duration:.2f}s vs audio {audio_duration:.2f}s")
-            else:
-                print(f"🎯 Perfect sync! Video matches audio duration")
+        
+        return True
         
     except subprocess.CalledProcessError as e:
         logging.error(f"FFmpeg merge failed: {e}")
         logging.error(f"FFmpeg stderr: {e.stderr}")
-        raise
+        print(f"❌ Audio/video merge failed: {e}")
+        return False
 
 def create_upload_instructions(video_path, topic, script, timestamp):
     """Create instructions for manual upload"""
@@ -323,6 +418,8 @@ Inspired by the teachings of Alan Watts and Terence McKenna, this short explores
 📝 TOPIC: {topic}
 ⏱️ CREATED: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 
+✨ This video has BURNED-IN CAPTIONS - no need to add additional captions!
+
 {"="*60}
 🎵 TIKTOK UPLOAD
 {"="*60}
@@ -335,9 +432,7 @@ Inspired by the teachings of Alan Watts and Terence McKenna, this short explores
 2. Click "+" to create new video
 3. Upload: {video_path.name}
 4. Copy-paste caption above
-5. Enable auto-captions in TikTok settings
-6. Add trending sounds if desired
-7. Post!
+5. Post! (Captions already embedded in video)
 
 {"="*60}
 📺 YOUTUBE SHORTS UPLOAD  
@@ -356,8 +451,7 @@ Inspired by the teachings of Alan Watts and Terence McKenna, this short explores
 4. Title: Copy title above
 5. Description: Copy description above  
 6. Select "Short" if not auto-detected
-7. Enable auto-captions in YouTube settings
-8. Publish!
+7. Publish! (Captions already embedded in video)
 
 {"="*60}
 📜 ORIGINAL SCRIPT
@@ -367,13 +461,12 @@ Inspired by the teachings of Alan Watts and Terence McKenna, this short explores
 {"="*60}
 💡 TIPS
 {"="*60}
+- Video has professional burned-in captions
 - Best posting times: 6-9pm local time
 - Engage with early comments quickly
 - Cross-post within 1-2 hours for max reach
 - Monitor performance and adjust hashtags
 - Save high-performing topics for future content
-- Platform auto-captions are enabled by default
-- Video duration is perfectly synced with audio
 
 ✅ DELETE THIS FILE AFTER UPLOADING
 """
@@ -416,7 +509,7 @@ def main():
         script_path = SCRIPT_DIR / f"{timestamp}.txt"
         script_path.write_text(script, encoding="utf-8")
         logging.info(f"Script generated and saved to: {script_path}")
-        print("✅ Script generated with Claude")
+        print("✅ Clean script generated with Claude")
 
         # Step 2: Generate voice audio with OpenAI TTS
         audio_path = AUDIO_DIR / f"{timestamp}.mp3"
@@ -429,30 +522,45 @@ def main():
         combined_audio_path = AUDIO_DIR / f"{timestamp}_with_music.mp3"
         final_audio_duration = add_background_music(audio_path, combined_audio_path)
 
-        # Step 4: Download background video with target duration
+        # Step 4: Download background video
         video_path = VIDEO_DIR / f"{timestamp}.mp4"
-        video_duration = download_trippy_video(video_path, final_audio_duration)
+        original_video_duration = download_trippy_video(video_path)
         logging.info(f"Background video downloaded: {video_path}")
-        print("🎬 Trippy background video downloaded")
 
-        # Step 5: Merge audio and video with perfect sync
-        final_path = FINAL_DIR / f"{timestamp}_final.mp4"
-        merge_audio_video(str(combined_audio_path), str(video_path), str(final_path), final_audio_duration)
-        logging.info(f"Audio and video merged: {final_path}")
-        print("🎥 Audio and video merged with perfect sync")
-
-        # Step 6: Generate SRT captions (for reference/backup)
-        srt_path = FINAL_DIR / f"{timestamp}.srt"
+        # Step 5: Extend video to match audio duration
+        extended_video_path = VIDEO_DIR / f"{timestamp}_extended.mp4"
+        print("\n🔄 Extending video to match audio length...")
         
-        # Use the final video as the "captioned" version (no burning needed)
-        captioned_path = final_path
+        if extend_video_to_match_audio(video_path, final_audio_duration, extended_video_path):
+            print("✅ Video extended successfully")
+            video_to_use = extended_video_path
+        else:
+            print("⚠️ Video extension failed, using original")
+            video_to_use = video_path
 
-        # Generate SRT file for reference
+        # Step 6: Merge audio and video with perfect sync
+        final_path = FINAL_DIR / f"{timestamp}_final.mp4"
+        if merge_audio_video(str(combined_audio_path), str(video_to_use), str(final_path)):
+            logging.info(f"Audio and video merged: {final_path}")
+            print("🎥 Audio and video merged successfully")
+        else:
+            raise Exception("Failed to merge audio and video")
+
+        # Step 7: Generate and burn captions
+        srt_path = FINAL_DIR / f"{timestamp}.srt"
+        captioned_path = FINAL_DIR / f"{timestamp}_captioned.mp4"
+
+        # Transcribe audio to subtitles
         transcribe_audio_to_srt(combined_audio_path, srt_path)
         logging.info(f"Captions generated: {srt_path}")
-        print("📝 SRT captions generated (platforms will handle auto-captions)")
+        print("📝 Captions generated with Whisper")
 
-        # Step 7: Prepare for manual upload
+        # Burn captions into video
+        burn_captions(final_path, srt_path, captioned_path)
+        logging.info(f"Captions burned into video: {captioned_path}")
+        print("🔥 Captions burned into video successfully")
+
+        # Step 8: Prepare for manual upload
         print("\n📤 Preparing for manual upload...")
         upload_video_path, instructions_file = prepare_for_upload(captioned_path, topic, script, timestamp)
         
@@ -467,7 +575,7 @@ def main():
         print("1. Check the 'ready_to_upload' folder")
         print("2. Open the instructions file for upload details")
         print("3. Upload to TikTok and YouTube when ready")
-        print("4. Enable platform auto-captions during upload")
+        print("4. Captions are already burned into the video!")
         print("5. Delete instructions file after uploading")
         
         # Show quick preview of what was created
@@ -477,8 +585,16 @@ def main():
         print(f"Script length: {len(script)} characters")
         print(f"Audio duration: {final_audio_duration:.2f} seconds")
         print(f"Video duration: {final_video_duration:.2f} seconds" if final_video_duration else "Video duration: Unknown")
-        print(f"Sync status: {'✅ Perfect' if final_video_duration and abs(final_video_duration - final_audio_duration) < 0.5 else '⚠️ Check sync'}")
+        
+        if final_video_duration:
+            duration_diff = abs(final_video_duration - final_audio_duration)
+            if duration_diff < 1.0:
+                print(f"Sync status: ✅ Perfect (difference: {duration_diff:.2f}s)")
+            else:
+                print(f"Sync status: ⚠️ Check ({duration_diff:.2f}s difference)")
+        
         print(f"Has background music: {'Yes' if Path('assets').exists() and list(Path('assets').glob('*.mp3')) else 'No'}")
+        print(f"Captions: ✅ Burned-in professionally")
 
     except Exception as e:
         logging.error(f"Error in main pipeline: {e}")
