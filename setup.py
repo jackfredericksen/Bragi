@@ -57,17 +57,16 @@ def create_env_template():
     env_template = """# Esoteric Content Bot Configuration
 # Get your API keys from the respective services
 
-# Claude (Anthropic API)
+# Claude (Anthropic API) - Script Generation
 ANTHROPIC_API_KEY=your_anthropic_api_key_here
 
-# ElevenLabs (Voice Generation)
-ELEVENLABS_API_KEY=your_elevenlabs_api_key_here
-ELEVENLABS_VOICE_ID=your_voice_id_here
+# OpenAI - Voice Generation (TTS)
+OPENAI_API_KEY=your_openai_api_key_here
 
-# Pexels (Stock Videos)
+# Pexels - Stock Videos
 PEXELS_API_KEY=your_pexels_api_key_here
 
-# Optional: Platform cookie paths
+# Optional: Platform cookie paths for session persistence
 TIKTOK_COOKIE_PATH=tiktok_cookies.pkl
 YOUTUBE_COOKIE_PATH=youtube_cookies.pkl
 """
@@ -120,7 +119,7 @@ def display_next_steps():
     print("\n📋 NEXT STEPS:")
     print("1. Edit .env file with your API keys:")
     print("   - Anthropic API key (Claude)")
-    print("   - ElevenLabs API key + Voice ID")  
+    print("   - OpenAI API key (TTS)")  
     print("   - Pexels API key")
     print("\n2. Add ambient music files to assets/ folder")
     print("   - ambient1.mp3, ambient2.mp3, etc.")

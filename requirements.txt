@@ -1,6 +1,6 @@
 anthropic
 requests
-elevenlabs
+openai
 python-dotenv
 selenium
 moviepy
@@ -9,4 +9,3 @@ openai-whisper
 ffmpeg-python
 undetected-chromedriver
 pydub
-pathlib

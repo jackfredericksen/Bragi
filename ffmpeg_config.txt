@@ -1,0 +1,3 @@
+# FFmpeg Configuration
+# This file is used by main.py to find FFmpeg
+FFMPEG_PATH=ffmpeg

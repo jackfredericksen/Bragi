@@ -57,3 +57,6 @@ tmp/
 build/
 dist/
 *.egg-info/
+
+topics.txt
+*/temp_captions_work/*
