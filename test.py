@@ -1,143 +1,174 @@
 #!/usr/bin/env python3
 """
-Test script for caption generation and burning
-Helps debug caption issues independently
+Test Dynamic Captions & Hashtags
+See how varied and engaging your captions will be
 """
 
-import subprocess
-from pathlib import Path
+from dynamic_captions_hashtags import (
+    create_tiktok_caption,
+    create_youtube_title_and_description,
+    get_caption_variety_stats,
+    test_caption_variety,
+    HASHTAG_CATEGORIES
+)
+import random
 
-def test_caption_burning():
-    """Test caption burning with the latest generated files"""
+def test_caption_system():
+    """Test the dynamic caption system"""
+    print("🎬 Dynamic Caption & Hashtag System Test")
+    print("=" * 50)
     
-    # Find the most recent files
-    final_dir = Path("esoteric_content_pipeline/final_videos")
-    
-    if not final_dir.exists():
-        print("❌ No final_videos directory found")
-        return
-    
-    # Get most recent files
-    video_files = list(final_dir.glob("*_final.mp4"))
-    srt_files = list(final_dir.glob("*.srt"))
-    
-    if not video_files:
-        print("❌ No video files found")
-        return
-        
-    if not srt_files:
-        print("❌ No SRT files found")
-        return
-    
-    # Use most recent files
-    video_file = sorted(video_files)[-1]
-    srt_file = sorted(srt_files)[-1]
-    output_file = final_dir / f"{video_file.stem}_test_captions.mp4"
-    
-    print(f"🧪 Testing caption burning:")
-    print(f"   Video: {video_file}")
-    print(f"   SRT: {srt_file}")
-    print(f"   Output: {output_file}")
-    
-    # Check if files exist
-    if not video_file.exists():
-        print(f"❌ Video file doesn't exist: {video_file}")
-        return
-        
-    if not srt_file.exists():
-        print(f"❌ SRT file doesn't exist: {srt_file}")
-        return
-    
-    # Test different FFmpeg subtitle commands
-    test_commands = [
-        # Method 1: Forward slashes
-        [
-            "ffmpeg", "-y",
-            "-i", str(video_file).replace('\\', '/'),
-            "-vf", f"subtitles='{str(srt_file).replace('\\', '/')}':force_style='FontName=Arial,FontSize=40,PrimaryColour=&HFFFFFF&,OutlineColour=&H000000&,BorderStyle=1,Outline=2,Shadow=0,Alignment=2'",
-            "-c:a", "copy",
-            str(output_file).replace('\\', '/')
-        ],
-        
-        # Method 2: Escaped backslashes
-        [
-            "ffmpeg", "-y", 
-            "-i", str(video_file),
-            "-vf", f"subtitles={str(srt_file).replace('\\', '\\\\')}:force_style='FontName=Arial,FontSize=40,PrimaryColour=&HFFFFFF&,OutlineColour=&H000000&,BorderStyle=1,Outline=2,Shadow=0,Alignment=2'",
-            "-c:a", "copy",
-            str(output_file)
-        ],
-        
-        # Method 3: No quotes around subtitle path
-        [
-            "ffmpeg", "-y",
-            "-i", str(video_file),
-            "-vf", f"subtitles={str(srt_file).replace('\\', '/')}:force_style='FontName=Arial,FontSize=40,PrimaryColour=&HFFFFFF&,OutlineColour=&H000000&,BorderStyle=1,Outline=2,Shadow=0,Alignment=2'",
-            "-c:a", "copy", 
-            str(output_file)
-        ]
+    # Test topics
+    test_topics = [
+        "The nature of consciousness",
+        "Time as an illusion", 
+        "Ego death and rebirth",
+        "Sacred geometry",
+        "Quantum consciousness"
     ]
     
-    for i, cmd in enumerate(test_commands, 1):
-        print(f"\n🧪 Testing method {i}...")
-        print(f"Command: {' '.join(cmd[:4])} ... [truncated]")
-        
-        try:
-            result = subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=60)
-            print(f"✅ Method {i} SUCCESS!")
-            print(f"📁 Output saved: {output_file}")
-            return True
-            
-        except subprocess.CalledProcessError as e:
-            print(f"❌ Method {i} failed with exit code {e.returncode}")
-            if e.stderr:
-                # Show first few lines of error
-                error_lines = e.stderr.split('\n')[:3]
-                for line in error_lines:
-                    if line.strip():
-                        print(f"   Error: {line.strip()}")
-        except subprocess.TimeoutExpired:
-            print(f"❌ Method {i} timed out")
-        except Exception as e:
-            print(f"❌ Method {i} failed: {e}")
-    
-    print("\n❌ All caption methods failed")
-    return False
-
-def show_srt_content():
-    """Show the content of the most recent SRT file"""
-    srt_files = list(Path("esoteric_content_pipeline/final_videos").glob("*.srt"))
-    
-    if not srt_files:
-        print("❌ No SRT files found")
-        return
-    
-    srt_file = sorted(srt_files)[-1]
-    print(f"\n📝 Content of {srt_file}:")
-    print("-" * 30)
-    
-    try:
-        with open(srt_file, 'r', encoding='utf-8') as f:
-            content = f.read()
-            print(content[:500])  # Show first 500 characters
-            if len(content) > 500:
-                print("... [truncated]")
-    except Exception as e:
-        print(f"❌ Error reading SRT file: {e}")
-
-def main():
-    """Main test function"""
-    print("🧪 Caption Burning Test")
+    print("🧪 Testing Caption Variety...")
     print("=" * 30)
     
-    # Show SRT content first
-    show_srt_content()
+    for i, topic in enumerate(test_topics, 1):
+        print(f"\n{i}. Topic: {topic}")
+        print("-" * 25)
+        
+        # TikTok caption
+        tiktok_caption = create_tiktok_caption(topic)
+        print(f"TikTok: {tiktok_caption}")
+        
+        # YouTube
+        yt_title, yt_desc = create_youtube_title_and_description(topic)
+        print(f"YouTube Title: {yt_title}")
+        print(f"YouTube Desc: {yt_desc[:80]}...")
+        
+        if i < len(test_topics):  # Don't add separator after last item
+            print()
+
+def show_hashtag_categories():
+    """Show available hashtag categories"""
+    print("\n📋 AVAILABLE HASHTAG CATEGORIES")
+    print("=" * 40)
     
-    # Test caption burning
-    if test_caption_burning():
-        print("\n🎉 Caption test successful!")
+    for category, tags in HASHTAG_CATEGORIES.items():
+        print(f"\n{category.upper().replace('_', ' ')} ({len(tags)} tags):")
+        # Show first few examples
+        sample_tags = tags[:6]
+        print(f"   {' '.join(sample_tags)}")
+        if len(tags) > 6:
+            print(f"   ... and {len(tags) - 6} more")
+
+def test_hashtag_variety():
+    """Test hashtag combination variety"""
+    print("\n🏷️ HASHTAG COMBINATION VARIETY TEST")
+    print("=" * 45)
+    
+    from dynamic_captions_hashtags import generate_varied_hashtags
+    
+    print("Generating 5 different hashtag combinations:\n")
+    
+    for i in range(5):
+        hashtags = generate_varied_hashtags()
+        hashtag_string = " ".join(hashtags)
+        print(f"{i+1}. {hashtag_string}")
+    
+    print(f"\n💡 Each combination is unique and covers different spiritual themes!")
+
+def show_caption_styles():
+    """Show different caption style examples"""
+    print("\n✍️ CAPTION STYLE VARIATIONS")
+    print("=" * 35)
+    
+    topic = "consciousness"
+    
+    print(f"Topic: {topic}")
+    print("Different style variations:\n")
+    
+    # Generate several variations
+    for i in range(6):
+        caption = create_tiktok_caption(topic)
+        # Extract just the main caption part (before hashtags)
+        main_caption = caption.split('#')[0].strip()
+        print(f"{i+1}. {main_caption}")
+
+def analyze_current_variety():
+    """Analyze current variety statistics"""
+    print("\n📊 CURRENT VARIETY STATISTICS")
+    print("=" * 35)
+    
+    stats = get_caption_variety_stats()
+    
+    print(f"Total captions generated: {stats['total_captions_used']}")
+    print(f"Unique captions: {stats['unique_captions']}")
+    print(f"Variety score: {stats['variety_score']:.1f}%")
+    
+    if stats['total_captions_used'] == 0:
+        print("\n💡 No captions generated yet - run main.py to start tracking!")
+    elif stats['variety_score'] > 80:
+        print("\n✅ Excellent variety! Your captions are highly diverse.")
+    elif stats['variety_score'] > 60:
+        print("\n🟡 Good variety, but could be more diverse.")
     else:
-        print("\n❌ Caption test failed - check FFmpeg installation and file paths")
+        print("\n🔴 Low variety - captions may be repetitive.")
+
+def interactive_test():
+    """Interactive caption testing"""
+    print("\n🎯 INTERACTIVE CAPTION TESTER")
+    print("=" * 35)
+    
+    while True:
+        topic = input("\nEnter a topic to test (or 'quit' to exit): ").strip()
+        
+        if topic.lower() in ['quit', 'exit', 'q']:
+            break
+        
+        if not topic:
+            topic = "consciousness"  # Default
+        
+        print(f"\n🎬 Testing: {topic}")
+        print("-" * 20)
+        
+        # Generate content
+        tiktok_caption = create_tiktok_caption(topic)
+        yt_title, yt_desc = create_youtube_title_and_description(topic)
+        
+        print(f"TikTok: {tiktok_caption}")
+        print(f"YouTube: {yt_title}")
+        print(f"Description: {yt_desc[:100]}...")
+
+def main():
+    """Main testing interface"""
+    while True:
+        print("\n🎨 Dynamic Caption & Hashtag Tester")
+        print("=" * 40)
+        print("1. Test caption variety")
+        print("2. Show hashtag categories") 
+        print("3. Test hashtag combinations")
+        print("4. Show caption style variations")
+        print("5. Analyze current variety")
+        print("6. Interactive tester")
+        print("0. Exit")
+        
+        choice = input("\nSelect option: ").strip()
+        
+        if choice == "0":
+            print("👋 Goodbye!")
+            break
+        elif choice == "1":
+            test_caption_system()
+        elif choice == "2":
+            show_hashtag_categories()
+        elif choice == "3":
+            test_hashtag_variety()
+        elif choice == "4":
+            show_caption_styles()
+        elif choice == "5":
+            analyze_current_variety()
+        elif choice == "6":
+            interactive_test()
+        else:
+            print("❌ Invalid option")
 
 if __name__ == "__main__":
     main()

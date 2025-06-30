@@ -61,11 +61,18 @@ logging.basicConfig(
 )
 
 def get_random_topic():
-    if os.path.exists(TOPIC_FILE):
-        with open(TOPIC_FILE, "r", encoding="utf-8") as f:
-            topics = [line.strip() for line in f if line.strip()]
-        return random.choice(topics)
-    return "The nature of consciousness"
+    """Get a topic with enhanced variety tracking"""
+    # Import the variety enhancer
+    from content_variety_enhancer import get_varied_topic, create_expanded_topics_file, auto_expand_topics
+    
+    # Ensure we have an expanded topics file
+    create_expanded_topics_file()
+    
+    # 10% chance to auto-generate new topics
+    if random.random() < 0.1:
+        auto_expand_topics()
+    
+    return get_varied_topic()
 
 def generate_script_with_claude(topic):
     """Generate a clean philosophical script without any meta-instructions"""
@@ -235,15 +242,31 @@ def add_background_music(voice_audio_path, output_path):
             return get_audio_duration(output_path)
 
 def download_trippy_video(output_path):
-    """Download background video"""
+    """Download background video with enhanced variety"""
+    from content_variety_enhancer import get_varied_background_search
+    
     headers = {"Authorization": PEXELS_API_KEY}
-    search_term = random.choice(["psychedelic", "space", "cosmic", "fractal", "nature", "trippy", "meditation", "abstract"])
+    
+    # Use the enhanced variety system for search terms
+    search_term = get_varied_background_search()
+    
     url = f"https://api.pexels.com/videos/search?query={search_term}&orientation=portrait&per_page=20"
 
+    print(f"🎬 Searching for: {search_term}")
+    
     response = requests.get(url, headers=headers)
     data = response.json()
+    
     if not data["videos"]:
-        raise Exception(f"No videos found for search term: {search_term}")
+        # Fallback to basic search terms if specific search fails
+        fallback_terms = ["abstract", "nature", "cosmic", "flowing", "peaceful"]
+        search_term = random.choice(fallback_terms)
+        url = f"https://api.pexels.com/videos/search?query={search_term}&orientation=portrait&per_page=20"
+        response = requests.get(url, headers=headers)
+        data = response.json()
+        
+        if not data["videos"]:
+            raise Exception(f"No videos found even with fallback terms")
 
     # Get the first available video (we'll loop it to match audio length)
     video = data["videos"][0]
@@ -395,18 +418,23 @@ def merge_audio_video(audio_path, video_path, output_path):
         return False
 
 def create_upload_instructions(video_path, topic, script, timestamp):
-    """Create instructions for manual upload"""
+    """Create instructions for manual upload with dynamic captions"""
+    from dynamic_captions_hashtags import (
+        create_tiktok_caption, 
+        create_youtube_title_and_description,
+        save_caption_hashtag_usage
+    )
+    
     instructions_file = UPLOAD_QUEUE_DIR / f"{timestamp}_upload_instructions.txt"
     
-    # Generate suggested captions for each platform
-    tiktok_caption = f"{topic} #esoteric #alanwatts #consciousness #psychedelic #philosophy #mystical #fyp"
-    youtube_title = f"{topic} - Esoteric Philosophy #Shorts"
-    youtube_description = f"""Exploring {topic.lower()} through the lens of mystical philosophy.
-
-Inspired by the teachings of Alan Watts and Terence McKenna, this short explores the deeper mysteries of existence and consciousness.
-
-#esoteric #consciousness #philosophy #alanwatts #terencemckenna #mysticism #shorts #spirituality #awakening"""
-
+    # Generate dynamic content
+    tiktok_caption = create_tiktok_caption(topic)
+    youtube_title, youtube_description = create_youtube_title_and_description(topic)
+    
+    # Track usage for variety
+    hashtags_used = [tag for tag in tiktok_caption.split() if tag.startswith('#')]
+    save_caption_hashtag_usage(tiktok_caption, hashtags_used)
+    
     # Get video duration for reference
     video_duration = get_video_duration(video_path)
     duration_info = f" ({video_duration:.1f} seconds)" if video_duration else ""
@@ -459,13 +487,20 @@ Inspired by the teachings of Alan Watts and Terence McKenna, this short explores
 {script}
 
 {"="*60}
-💡 TIPS
+💡 CONTENT FEATURES
 {"="*60}
 - Video has professional burned-in captions
+- Dynamic hashtags for maximum reach
+- Generic spiritual/philosophical tags (no specific names)
+- Varied caption style for engagement
+- Optimized for mobile viewing
+
+💡 POSTING TIPS
+{"="*60}
 - Best posting times: 6-9pm local time
 - Engage with early comments quickly
 - Cross-post within 1-2 hours for max reach
-- Monitor performance and adjust hashtags
+- Monitor which hashtag combinations perform best
 - Save high-performing topics for future content
 
 ✅ DELETE THIS FILE AFTER UPLOADING
@@ -560,9 +595,16 @@ def main():
         logging.info(f"Captions burned into video: {captioned_path}")
         print("🔥 Captions burned into video successfully")
 
-        # Step 8: Prepare for manual upload
-        print("\n📤 Preparing for manual upload...")
+        # Step 8: Prepare for manual upload with dynamic captions
+        print("\n📤 Preparing for manual upload with dynamic captions...")
         upload_video_path, instructions_file = prepare_for_upload(captioned_path, topic, script, timestamp)
+        
+        # Show what captions were generated
+        from dynamic_captions_hashtags import create_tiktok_caption, create_youtube_title_and_description
+        sample_tiktok = create_tiktok_caption(topic)
+        sample_yt_title, _ = create_youtube_title_and_description(topic)
+        print(f"📝 Generated TikTok caption preview: {sample_tiktok[:50]}...")
+        print(f"📺 Generated YouTube title: {sample_yt_title}")
         
         logging.info("Pipeline completed successfully")
         print("\n" + "=" * 50)
@@ -595,6 +637,7 @@ def main():
         
         print(f"Has background music: {'Yes' if Path('assets').exists() and list(Path('assets').glob('*.mp3')) else 'No'}")
         print(f"Captions: ✅ Burned-in professionally")
+        print(f"Content style: ✅ Dynamic captions and hashtags")
 
     except Exception as e:
         logging.error(f"Error in main pipeline: {e}")
